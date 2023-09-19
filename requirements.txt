@@ -1,0 +1,16 @@
+uvicorn
+fastapi
+pygeohash
+pandas
+requests
+datetime
+#pickle
+numpy
+#os
+scikit-learn==1.1.3
+google-cloud-bigquery<3.0.0
+google-cloud-storage
+python-dotenv
+xgboost
+savReaderWriter
+onnxmltools

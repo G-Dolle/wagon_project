@@ -1,0 +1,11 @@
+docker build --tag=$IMAGE:dev .
+docker run -e PORT=8000 -p 8000:8000 --env-file .env $IMAGE:dev
+docker ps
+docker stop XXXX
+
+
+docker build -t $GCR_MULTI_REGION/$PROJECT/$DOCKER_IMAGE_NAME .
+docker push $GCR_MULTI_REGION/$PROJECT/$DOCKER_IMAGE_NAME
+gcloud run deploy --image $GCR_MULTI_REGION/$PROJECT/$DOCKER_IMAGE_NAME --platform managed --region $REGION
+
+beware of API keys and environment variables: these are not handled well by FAST API
