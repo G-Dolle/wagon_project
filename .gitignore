@@ -2,9 +2,7 @@ raw_data/
 .env
 **/__pycache__/
 /__pycache__/
-*.csv
 .DS_Store
 */__pycache__/*
 notebooks/
 *.ipynb
-
