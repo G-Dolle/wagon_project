@@ -17,11 +17,11 @@ def train_model(model: xgb.XGBRegressor(),
     #saved_model = pkl.dumps(model)
 
     if arr_dep =="arrivals":
-        filename = 'bikes_available/models/model_arr.sav'
+        filename = 'models/model_arr.sav'
         pkl.dump(model, open(filename, 'wb'))
 
     elif arr_dep =="departures":
-        filename = 'bikes_available/models/model_dep.sav'
+        filename = 'models/model_dep.sav'
         pkl.dump(model, open(filename, 'wb'))
 
     return model
@@ -29,11 +29,11 @@ def train_model(model: xgb.XGBRegressor(),
 def load_model(arr_dep):
 
     if arr_dep =="arrivals":
-        filename = 'bikes_available/models/model_arr.sav'
+        filename = 'models/model_arr.sav'
         loaded_model = pkl.load(open(filename, 'rb'))
 
     elif arr_dep =="departures":
-        filename = 'bikes_available/models/model_dep.sav'
+        filename = 'models/model_dep.sav'
         loaded_model = pkl.load(open(filename, 'rb'))
 
     return loaded_model

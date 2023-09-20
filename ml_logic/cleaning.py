@@ -75,7 +75,21 @@ def clean_divvy_new(df):
 
 
 
-def station_list_to_csv(df_dep, treshold=3000):
+def station_list_to_csv(df, treshold=3000):
+
+    df=df[df["rideable_type"]!="electric_bike"]
+    df['started_at']=pd.to_datetime(df['started_at'])
+    df['ended_at']=pd.to_datetime(df['ended_at'])
+    df['hourly_data_started'] = df.started_at.dt.round('60min')
+    df['hourly_data_ended'] = df.ended_at.dt.round('60min')
+
+    df_dep=df[[
+                    "start_station_name",
+                    'hourly_data_started',
+                    "start_lat",
+                    "start_lng"]]
+
+    df_dep=df_dep.rename(columns={"start_station_name":"station_name"})
 
     df_dep['nb_rows'] = df_dep.groupby('station_name')['station_name'].transform('count')
     df_dep = df_dep[df_dep['nb_rows'] >= treshold]
@@ -84,7 +98,7 @@ def station_list_to_csv(df_dep, treshold=3000):
     station_df = df_dep[["station_name","start_lat","start_lng"]]
 
 
-    station_df.to_csv("bikes_available/interface_api/data/station_list.csv", index=False)
+    station_df.to_csv("interface_api/data/station_list.csv", index=False)
 
 
 # Creating the features and target dataframes for the training set
@@ -148,3 +162,18 @@ def features_target_test(df_arr, df_dep, df_weather, station_name_list):
 
 
     return features_dep_df, features_arr_df, target_dep_df, target_arr_df
+
+
+def time_features(X):
+        import math
+        X['date_time'] = pd.to_datetime(X['date_time'])
+        X['date_time'] = X['date_time'].dt.tz_localize('UTC')
+        X['date_time'] = X['date_time'].dt.tz_convert("America/Chicago")
+        X['day_of_week'] = X['date_time'].dt.dayofweek
+        X['hour'] = X['date_time'].dt.hour
+        X['month'] = X['date_time'].dt.month
+        X['hour_sin'] = np.sin(2 * math.pi / 24 *  X['hour'])
+        X['hour_cos'] = np.cos(2 * math.pi / 24 *  X['hour'])
+        X.drop(columns=['date_time', 'hour'], inplace=True)
+
+        return X

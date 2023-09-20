@@ -4,9 +4,10 @@ import numpy as np
 import math
 
 from ml_logic.data_import import get_weather_data, get_station_data, get_cloud_year_data, get_local_data
-from ml_logic.cleaning import clean_divvy_new,weather_cleaning_v2, features_target_v2
+from ml_logic.cleaning import clean_divvy_new,weather_cleaning_v2, features_target_v2, features_target_test, station_list_to_csv, time_features
 from ml_logic.preprocessor import preprocess_features
-
+from ml_logic.model import initialize_model, train_model, predict, score
+from sklearn.metrics import mean_absolute_error
 
 
 
@@ -20,19 +21,14 @@ def preprocess():
     data_source = os.environ.get("SOURCE")
     year= os.environ.get("DIVVY_TRAIN_YEAR_GCP")
 
-    if data_source == "gcp":
+    print(data_source)
 
-        raw_divvy_df = get_cloud_year_data(year)
-
-        print("Divvy Raw data imported from cloud")
-
-    if data_source == "local":
-        raw_divvy_df = get_local_data(year)
-        print("Divvy Raw data imported from local disk")
+    raw_divvy_df = get_local_data(year)
+    print("Divvy Raw data imported from local disk")
 
     raw_weather_df = get_weather_data()
 
-    station_df = get_station_data()
+    #station_df = get_station_data()
 
     print("Raw data imported")
 
@@ -47,26 +43,26 @@ def preprocess():
 
     features_dep_df, features_arr_df, target_dep_df, target_arr_df, station_name_list = features_target_v2(df_arr_hourly, df_dep_hourly, clean_weather_df)
 
+    #features_dep_df_comp = time_features(features_dep_df)
+    #features_arr_df_comp = time_features(features_arr_df)
+
+    station_list_to_csv(raw_divvy_df,treshold=3000)
+
     print("features and target dataframes created")
 
     # preprocess features
-    preprocessor, X_processed_df = preprocess_features(X)
 
-    print("features preprocessed")
-
-    # preprocess target
-
-    preprocessor_dep, X_dep_processed_df = preprocess_features(features_dep_df,"bikes_available/preprocessors/pipeline_dep.joblib")
-    preprocessor_arr, X_arr_processed_df = preprocess_features(features_arr_df,"bikes_available/preprocessors/pipeline_arr.joblib")
+    preprocessor_dep, X_dep_processed_df = preprocess_features(features_dep_df,"preprocessors/pipeline_dep.joblib")
+    preprocessor_arr, X_arr_processed_df = preprocess_features(features_arr_df,"preprocessors/pipeline_arr.joblib")
 
     print("Preprocessing of Training set is done")
 
-    return X_dep_processed_df, X_arr_processed_df, preprocessor_dep, preprocessor_arr, target_dep_df, target_arr_df
+    return X_dep_processed_df, X_arr_processed_df, preprocessor_dep, preprocessor_arr, target_dep_df, target_arr_df, station_name_list, clean_weather_df
 
 
 # preprocessing a test set
 
-def preprocess_test(preprocessor_dep, preprocessor_arr):
+def preprocess_test(preprocessor_dep, preprocessor_arr, station_name_list, clean_weather_df):
 
     # Import data
     quarter= os.environ.get("DIVVY_QUARTER_TEST")
@@ -76,66 +72,94 @@ def preprocess_test(preprocessor_dep, preprocessor_arr):
 
     data_source = os.environ.get("SOURCE")
 
-    if data_source == "gcp":
 
-        raw_divvy_df = get_cloud_year_data(year)
+    year = 2022
 
-        print("Divvy Raw data imported from cloud")
+    table_name=f"Divvy_Trips_{year}_Q1.csv"
 
-    if data_source == "local":
+    path = r'raw_data/2022'
 
-
-        raw_divvy_df = get_local_data(year)
-        print("Divvy Raw data imported from local disk")
+    file_path = path+"/"+table_name
 
 
-    raw_weather_df = get_weather_data()
+    df_test_set = pd.read_csv(file_path)
+
+
+    table_name=f"Divvy_Trips_{year}_Q2.csv"
+    file_path = path+"/"+table_name
+
+    #path = os.path.join(os.path.expanduser(file_path))
+
+    df_q2 = pd.read_csv(file_path)
+
+    df_test_set = pd.concat([df_test_set,df_q2])
+
+
+    #raw_weather_df = get_weather_data()
 
     print("Test Raw data imported")
 
-    # Clean data & merge data
 
-    clean_divvy_df = cleaning_divvy_gen_agg(raw_divvy_df)
-    clean_weather_df = weather_cleaning(raw_weather_df)
+    df_dep_test_hourly, df_arr_test_hourly = clean_divvy_new(df_test_set)
+    features_dep_test_df, features_arr_test_df, target_dep_test_df, target_arr_test_df = features_target_test(df_arr_test_hourly, df_dep_test_hourly, clean_weather_df, station_name_list=station_name_list)
 
-    merged_df = merge_divvy_weather(clean_divvy_df, clean_weather_df)
+    #features_dep_test_df_comp = time_features(features_dep_test_df)
+    #features_arr_test_df_comp = time_features(features_arr_test_df)
 
-    print("Test Data cleaned and merged")
+    X_dep_test_processed = preprocessor_dep.transform(features_dep_test_df)
+    X_arr_test_processed = preprocessor_arr.transform(features_arr_test_df)
 
-    # Create features and target dataframes
+    print("Preprocessing of Test set is done")
 
-    X_test, y_test = features_target(merged_df, target_chosen)
+    return X_dep_test_processed, X_arr_test_processed, target_dep_test_df, target_arr_test_df, station_name_list
 
-    print("Test features and target dataframes created")
-
-    # transform the features test set
-
-    X_test_processed = preprocessor.transform(X_test)
-
-    # preprocess target
-
-    if target_chosen == "ratio":
-        y_test_processed = target_process(y_test)
-        print("ratio picked as target, and preprocessed")
-    else:
-        y_test_processed = y_test
-
-        print(f"{target_chosen} picked as target")
-
-    print("Preprocessing of test set is done")
-
-    return X_test_processed, y_test_processed
 
 # train model
 
-# Save model
+def training_model(X_dep_processed_df,target_dep_df, X_arr_processed_df, target_arr_df):
 
-# Evaluate model
+    # Create an instance of the XGBoost regressor
+    xgb_regressor = initialize_model()
 
-# predict
+    # Fit the model on the training data
+    model_dep = train_model(xgb_regressor,X_dep_processed_df, target_dep_df,arr_dep="departures")
+
+    # Create an instance of the XGBoost regressor
+    xgb_regressor = initialize_model()
+
+    # Fit the model on the training data
+    model_arr = train_model(xgb_regressor,X_arr_processed_df, target_arr_df,"arrivals")
+
+    return model_dep, model_arr
+
+# evaluate model
+
+def eval():
+
+    score_dep = score(model_dep,X_dep_processed_df,target_dep_df)
+    score_arr = score(model_arr,X_arr_processed_df,target_arr_df)
+
+    print(f"XGBoost score for departures: {score_dep:.4f}")
+    print(f"XGBoost score for arrivals: {score_arr:.4f}")
+
+# Predict
+def predict_function(model_dep, model_arr, X_dep_test_processed, X_arr_test_processed, target_dep_test_df, target_arr_df):
+
+    y_pred_dep = predict(model_dep,X_dep_test_processed)
+    y_pred_arr = predict(model_arr,X_arr_test_processed)
+
+    mse_xgboost_dep = mean_absolute_error(target_dep_test_df, y_pred_dep)
+    mse_xgboost_arr = mean_absolute_error(target_arr_test_df, y_pred_arr)
+
+    print(f"XGBoost MAE for departures: {mse_xgboost_dep:.4f}")
+    print(f"XGBoost MAE for arrivals: {mse_xgboost_arr:.4f}")
+
 
 
 if __name__ == '__main__':
     target_chosen = os.environ.get("TARGET_CHOSEN")
-    X_processed_df, y_processed_df, preprocessor = preprocess(target_chosen)
-    X_test_processed, y_test_processed=preprocess_test(preprocessor, target_chosen)
+    X_dep_processed_df, X_arr_processed_df, preprocessor_dep, preprocessor_arr, target_dep_df, target_arr_df, station_name_list, clean_weather_df = preprocess()
+    X_dep_test_processed, X_arr_test_processed, target_dep_test_df, target_arr_test_df, station_name_list=preprocess_test(preprocessor_dep, preprocessor_arr, station_name_list, clean_weather_df)
+    model_dep, model_arr = training_model(X_dep_processed_df,target_dep_df, X_arr_processed_df, target_arr_df)
+    eval()
+    predict_function(model_dep, model_arr, X_dep_test_processed, X_arr_test_processed, target_dep_test_df, target_arr_df)
